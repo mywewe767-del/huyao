@@ -1,4 +1,4 @@
-import type { PatternCategory, PatternDefinition } from "../types/weave";
+import type { CrossingRule, DirectionLayer, PatternCategory, PatternDefinition } from "../types/weave";
 
 type Rule = PatternDefinition["structure"]["overRule"];
 type Seed = [string, string, string, PatternCategory, number[], Rule, number, number, string[], string[]];
@@ -38,6 +38,30 @@ export const PATTERNS: PatternDefinition[] = seeds.map(([id, nameZh, nameEn, cat
   id, nameZh, nameEn, category,
   description: `${directions.length} 向参数化结构 · ${holes[0]} 单元`,
   defaultDensity: density, defaultStripWidth: width, transitionTags: tags,
+  directionLayers: directions.map((angle, directionIndex): DirectionLayer => ({
+    id: `${id}-direction-${directionIndex}`,
+    angle,
+    spacing: Math.max(width + 1.2, (20 + (index % 4) * 6) / (2.4 + directionIndex * .22)),
+    stripWidth: Math.max(1.8, width * (directionIndex > 1 ? .76 : 1)),
+    stripCount: 0,
+    density: Math.max(25, Math.min(100, density + (directionIndex % 3 - 1) * 8)),
+    enabled: true,
+  })),
+  crossingRules: directions.flatMap((_, a) => directions.slice(a + 1).map((__, offset): CrossingRule => {
+    const b = a + offset + 1;
+    return {
+      id: `${id}-cross-${a}-${b}`,
+      directionAId: `${id}-direction-${a}`,
+      directionBId: `${id}-direction-${b}`,
+      mode: overRule === "basket" ? "two-two" : overRule === "twill-4" ? "three-one" : "alternate",
+    };
+  })),
+  variants: [
+    { id: "standard", name: "标准" },
+    { id: "dense", name: "密织", densityMultiplier: 1.2 },
+    { id: "open", name: "疏织", densityMultiplier: .72 },
+    { id: "wide", name: "宽条", widthMultiplier: 1.35 },
+  ],
   structure: {
     repeat: { width: 20 + (index % 4) * 6, height: 20 + (index % 3) * 7 }, directions, overRule,
     directionSpacing: directions.map((_, directionIndex) => 1 + ((index + directionIndex) % 3) * .12),

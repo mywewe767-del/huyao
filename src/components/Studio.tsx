@@ -47,7 +47,7 @@ export function Studio() {
         <PatternLibrary />
         <section className="center-workspace">
           <div className="canvas-toolbar">
-            <div><CircleDot /><span>可编辑画板</span><small>滚轮缩放 · Space 拖动 · R/P/B 创建区域</small></div>
+            <div><CircleDot /><span>可编辑画板 · V3</span><small>滚轮缩放 · R/P/B 创建区域 · C 编辑交点</small></div>
             <div className="canvas-legend"><span><i className="warp-dot" />方向组 A</span><span><i className="weft-dot" />方向组 B+</span><span><i className="over-dot" />上穿节点</span></div>
           </div>
           <div className="viewport">{viewMode === "2d" ? <WeaveCanvas /> : <ThreePreview />}</div>

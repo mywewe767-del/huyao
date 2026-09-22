@@ -1,8 +1,39 @@
 export interface Point { x: number; y: number }
 
-export type CanvasTool = "select" | "direct" | "rectangle" | "polygon" | "brush" | "eraser" | "transition" | "gradient" | "pan";
+export type CanvasTool = "select" | "direct" | "rectangle" | "polygon" | "brush" | "eraser" | "transition" | "gradient" | "crossing" | "pan";
 export type PatternCategory = "basic" | "open" | "decorative" | "border";
-export type TransitionMode = "natural" | "structural" | "experimental";
+export type TransitionMode = "natural" | "structural" | "decorative" | "experimental";
+export type CrossingMode = "alternate" | "a-over" | "b-over" | "two-two" | "three-one" | "custom";
+export type TransitionStrategy = "spacing-gradient" | "count-gradient" | "width-gradient" | "direction-rotation" | "frequency-shift" | "skip-weave" | "merge-split" | "fan-out" | "pattern-morph" | "bridge-pattern";
+
+export interface DirectionLayer {
+  id: string;
+  angle: number;
+  spacing: number;
+  stripWidth: number;
+  stripCount: number;
+  density: number;
+  enabled: boolean;
+  color?: string;
+  materialId?: string;
+}
+
+export interface CrossingRule {
+  id: string;
+  directionAId: string;
+  directionBId: string;
+  mode: CrossingMode;
+  sequence?: number[];
+}
+
+export interface PatternVariant {
+  id: string;
+  name: string;
+  densityMultiplier?: number;
+  widthMultiplier?: number;
+  scaleMultiplier?: number;
+  rotation?: number;
+}
 
 export interface PatternTopology {
   dominantDirections: number[];
@@ -33,6 +64,9 @@ export interface PatternDefinition {
   defaultDensity: number;
   defaultStripWidth: number;
   transitionTags: string[];
+  directionLayers: DirectionLayer[];
+  crossingRules: CrossingRule[];
+  variants: PatternVariant[];
   structure: PatternStructure;
   topology: PatternTopology;
   source?: "builtin" | "image" | "manual";
@@ -41,9 +75,14 @@ export interface PatternDefinition {
 export interface PatternInstance {
   patternId: string;
   scale: number;
+  scaleX: number;
+  scaleY: number;
   rotation: number;
   density: number;
   stripWidth: number;
+  directionLayers: DirectionLayer[];
+  crossingRules: CrossingRule[];
+  crossingOverrides: Record<string, string>;
   directionWidths: Record<string, number>;
   directionColors: Record<string, string>;
   localOverrides: Record<string, { color?: string; width?: number }>;
@@ -101,12 +140,28 @@ export interface TransitionZone {
   adjacencyId: string;
   width: number;
   mode: TransitionMode;
+  strategy: TransitionStrategy;
   smoothness: number;
   complexity: number;
+  stageCount: number;
+  directionLayerId?: string;
+  bridgePatternIds: string[];
+  regenerationSeed: number;
+  fanCenter?: Point;
+  fanStrength: number;
+  spreadAngle: number;
+  curves: TransitionCurve[];
   controlPoints: Point[];
   enabled: boolean;
   visible: boolean;
   locked: boolean;
+}
+
+export interface TransitionCurve {
+  property: "density" | "spacing" | "width" | "angle" | "frequency";
+  directionLayerId?: string;
+  easing: "linear" | "ease-in" | "ease-out" | "ease-in-out";
+  keyframes: { t: number; value: number }[];
 }
 
 export interface CanvasConfig {
@@ -128,7 +183,7 @@ export interface AppearanceSettings {
 }
 
 export interface WeaveDocument {
-  version: 2;
+  version: 3;
   name: string;
   canvas: CanvasConfig;
   regions: WeaveRegion[];

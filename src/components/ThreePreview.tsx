@@ -44,5 +44,5 @@ function WeaveScene() {
 }
 
 export default function ThreePreview() {
-  return <div className="three-preview"><Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, .4, 8.5], fov: 38 }} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}><color attach="background" args={["#1d201e"]} /><ambientLight intensity={1.5} /><directionalLight position={[4, 6, 8]} intensity={3.2} castShadow /><directionalLight position={[-4, -2, 5]} intensity={1.1} color="#d9e6d7" /><WeaveScene /></Canvas><div className="preview-caption"><span>REALISTIC PREVIEW · V2</span><strong>多区域 · 连续过渡曲线 · Merge / Split 几何</strong></div></div>;
+  return <div className="three-preview"><Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, .4, 8.5], fov: 38 }} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}><color attach="background" args={["#1d201e"]} /><ambientLight intensity={1.5} /><directionalLight position={[4, 6, 8]} intensity={3.2} castShadow /><directionalLight position={[-4, -2, 5]} intensity={1.1} color="#d9e6d7" /><WeaveScene /></Canvas><div className="preview-caption"><span>REALISTIC PREVIEW · V3</span><strong>方向层密度 · Crossing Rules · 多策略结构过渡</strong></div></div>;
 }
