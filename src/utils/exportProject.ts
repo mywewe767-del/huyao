@@ -1,4 +1,4 @@
-import type { BambooProject } from "@/types/weave";
+import type { WeaveDocument } from "@/types/weave";
 
 function download(blob: Blob, filename: string) {
   const link = document.createElement("a");
@@ -8,11 +8,11 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(link.href), 500);
 }
 
-export function exportJson(project: BambooProject) {
+export function exportJson(project: WeaveDocument) {
   download(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }), `${project.name || "bamboo-design"}.bamboo.json`);
 }
 
-export async function exportPng(project: BambooProject) {
+export async function exportPng(project: WeaveDocument) {
   const source = document.getElementById("bamboo-structure-svg") as SVGSVGElement | null;
   if (!source) throw new Error("请先切换到 2D 结构视图");
   const svg = source.cloneNode(true) as SVGSVGElement;
@@ -41,13 +41,13 @@ export async function exportPng(project: BambooProject) {
   download(blob, `${project.name || "bamboo-design"}.png`);
 }
 
-export function loadJsonFile(file: File): Promise<BambooProject> {
+export function loadJsonFile(file: File): Promise<WeaveDocument> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const project = JSON.parse(String(reader.result)) as BambooProject;
-        if (project.version !== 1 || !Array.isArray(project.regions)) throw new Error("不支持的项目文件");
+        const project = JSON.parse(String(reader.result)) as WeaveDocument;
+        if (project.version !== 2 || !Array.isArray(project.regions)) throw new Error("不支持的项目文件，请使用 V2 JSON");
         resolve(project);
       } catch (error) { reject(error); }
     };

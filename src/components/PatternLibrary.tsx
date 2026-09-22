@@ -1,43 +1,32 @@
 "use client";
 
-import { PATTERNS } from "@/patterns/library";
-import { getPattern } from "@/patterns/library";
+import { ImagePlus, Layers3, Search, Shapes } from "lucide-react";
+import { useMemo, useState } from "react";
+import { getPattern, PATTERNS } from "@/patterns/library";
 import { useStudioStore } from "@/store/useStudioStore";
+import { LayerPanel } from "./LayerPanel";
 
 function PatternGlyph({ patternId }: { patternId: string }) {
   const pattern = getPattern(patternId);
-  const angles = pattern.structure.directions;
-  return (
-    <svg viewBox="0 0 64 52" aria-hidden="true">
-      <defs><clipPath id={`thumb-${patternId}`}><rect x="1" y="1" width="62" height="50" rx="5" /></clipPath></defs>
-      <g clipPath={`url(#thumb-${patternId})`}>
-        <rect width="64" height="52" fill="#f3ecdf" />
-        {angles.flatMap((angle, group) => Array.from({ length: 9 }, (_, index) => (
-          <line key={`${group}-${index}`} x1="-20" y1={index * 8 - 6} x2="84" y2={index * 8 - 6}
-            stroke={group === 0 ? "#b68b4c" : group === 1 ? "#75865c" : "#c49a62"}
-            strokeWidth={group === 2 ? 2.2 : 3.2} transform={`rotate(${angle} 32 26)`} opacity="0.9" />
-        )))}
-      </g>
-    </svg>
-  );
+  return <svg viewBox="0 0 64 52" aria-hidden="true"><defs><clipPath id={`thumb-${patternId}`}><rect x="1" y="1" width="62" height="50" rx="5" /></clipPath></defs><g clipPath={`url(#thumb-${patternId})`}><rect width="64" height="52" fill="#f3ecdf" />{pattern.structure.directions.flatMap((angle, group) => Array.from({ length: 8 }, (_, index) => <line key={`${group}-${index}`} x1="-22" y1={index * 9 - 6} x2="86" y2={index * 9 - 6} stroke={["#b68b4c", "#75865c", "#a5755f", "#647f8c"][group % 4]} strokeWidth={group > 1 ? 2.1 : 3} transform={`rotate(${angle} 32 26)`} opacity=".9" />))}</g></svg>;
 }
 
 export function PatternLibrary() {
+  const [tab, setTab] = useState<"patterns" | "layers">("patterns");
+  const [query, setQuery] = useState("");
   const selectedPatternId = useStudioStore((state) => state.selectedPatternId);
+  const selectedRegionId = useStudioStore((state) => state.selectedRegionId);
   const setSelectedPattern = useStudioStore((state) => state.setSelectedPattern);
-  return (
-    <aside className="panel library-panel">
-      <div className="panel-title-row"><div><span className="eyebrow">LIBRARY</span><h2>纹样库</h2></div><span className="count-badge">06</span></div>
-      <p className="panel-hint">选择纹样，再点击样板区域应用</p>
-      <div className="pattern-list">
-        {PATTERNS.map((pattern) => (
-          <button className={`pattern-card ${selectedPatternId === pattern.id ? "is-active" : ""}`} key={pattern.id} onClick={() => setSelectedPattern(pattern.id)}>
-            <span className="pattern-thumb"><PatternGlyph patternId={pattern.id} /></span>
-            <span className="pattern-copy"><strong>{pattern.nameZh}</strong><small>{pattern.nameEn}</small><em>{pattern.category} · {pattern.defaultDensity}%</em></span>
-          </button>
-        ))}
-      </div>
-      <div className="library-note"><span>参数化结构</span><strong>6 / 6</strong><p>所有纹样均由方向、间距和穿插规则实时生成。</p></div>
-    </aside>
-  );
+  const applyPattern = useStudioStore((state) => state.applyPattern);
+  const items = useMemo(() => PATTERNS.filter((pattern) => `${pattern.nameZh} ${pattern.nameEn}`.toLowerCase().includes(query.toLowerCase())), [query]);
+  const choose = (id: string) => { setSelectedPattern(id); if (selectedRegionId) applyPattern(selectedRegionId, id); };
+  return <aside className="panel library-panel">
+    <div className="library-tabs"><button className={tab === "patterns" ? "active" : ""} onClick={() => setTab("patterns")}><Shapes />纹样</button><button className={tab === "layers" ? "active" : ""} onClick={() => setTab("layers")}><Layers3 />图层</button></div>
+    {tab === "layers" ? <LayerPanel /> : <>
+      <div className="panel-title-row"><div><span className="eyebrow">PARAMETRIC LIBRARY</span><h2>纹样库</h2></div><span className="count-badge">{PATTERNS.length}</span></div>
+      <label className="library-search"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索纹样" /></label>
+      <div className="pattern-list v2">{items.map((pattern) => <button className={`pattern-card ${selectedPatternId === pattern.id ? "is-active" : ""}`} key={pattern.id} onClick={() => choose(pattern.id)}><span className="pattern-thumb"><PatternGlyph patternId={pattern.id} /></span><span className="pattern-copy"><strong>{pattern.nameZh}</strong><small>{pattern.nameEn}</small><em>{pattern.structure.directions.length} 向 · {pattern.defaultDensity}%</em></span></button>)}</div>
+      <button className="import-pattern-button" disabled title="将在 P1 图片识别阶段启用"><ImagePlus />从图片提取纹样 <span>P1</span></button>
+    </>}
+  </aside>;
 }

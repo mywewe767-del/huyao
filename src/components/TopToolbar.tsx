@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileDown, FolderOpen, Redo2, RotateCcw, Save, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, FileDown, Focus, FolderOpen, Redo2, RotateCcw, Save, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useRef } from "react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { exportJson, exportPng, loadJsonFile } from "@/utils/exportProject";
@@ -11,7 +11,7 @@ function ToolButton({ label, title, disabled, onClick, children }: { label?: str
 
 export function TopToolbar() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { project, undo, redo, past, future, zoom, setZoom, loadProject, resetProject, setToast } = useStudioStore();
+  const { project, undo, redo, past, future, zoom, setZoom, fitView, loadProject, resetProject, setToast } = useStudioStore();
   const onLoad = async (file?: File) => {
     if (!file) return;
     try { loadProject(await loadJsonFile(file)); setToast("项目已读取"); } catch (error) { setToast(error instanceof Error ? error.message : "读取失败"); }
@@ -25,7 +25,7 @@ export function TopToolbar() {
       <div className="document-title"><span className="save-dot" />{project.name}<small>{project.canvas.width} × {project.canvas.height} mm</small></div>
       <nav className="toolbar" aria-label="编辑工具栏">
         <div className="tool-group"><ToolButton title="撤销 (Ctrl+Z)" disabled={!past.length} onClick={undo}><Undo2 /></ToolButton><ToolButton title="重做 (Ctrl+Shift+Z)" disabled={!future.length} onClick={redo}><Redo2 /></ToolButton></div>
-        <div className="tool-group zoom-group"><ToolButton title="缩小" onClick={() => setZoom(zoom - 0.1)}><ZoomOut /></ToolButton><span>{Math.round(zoom * 100)}%</span><ToolButton title="放大" onClick={() => setZoom(zoom + 0.1)}><ZoomIn /></ToolButton></div>
+        <div className="tool-group zoom-group"><ToolButton title="缩小" onClick={() => setZoom(zoom - 0.1)}><ZoomOut /></ToolButton><span>{Math.round(zoom * 100)}%</span><ToolButton title="放大" onClick={() => setZoom(zoom + 0.1)}><ZoomIn /></ToolButton><ToolButton title="适合画面" onClick={fitView}><Focus /></ToolButton></div>
         <div className="tool-group">
           <ToolButton title="新建样板" onClick={resetProject}><RotateCcw /></ToolButton>
           <ToolButton title="读取项目" onClick={() => inputRef.current?.click()}><FolderOpen /></ToolButton>

@@ -1,6 +1,6 @@
-# Bamboo Weave Studio — MVP
+# Bamboo Weave Studio V2
 
-面向竹编设计的参数化 Web 编辑器。当前版本实现两个矩形区域、6 种程序化纹样、显式 Over/Under 交叉、密度过渡、2D/3D 同步预览、历史记录、自动保存、项目 JSON 与 PNG 导出。
+可编辑的参数化竹编设计 Canvas。纹样由方向、间距、条带和 Crossing 结构实时生成，不使用位图作为最终纹样。
 
 ## 运行
 
@@ -11,24 +11,37 @@ pnpm dev
 
 打开 `http://localhost:3000`。推荐桌面浏览器，最小视口宽度 1080px。
 
-## MVP 操作流程
+## V2 已实现
 
-1. 在左侧选择纹样，点击样板的左/右区域应用。
-2. 拖动样板中央绿色手柄调整两个区域大小。
-3. 在右侧修改当前区域的密度、方向、经纬宽度和颜色。
-4. 点击 2D 条带可进入单根竹条编辑。
-5. 在“基础过渡”中设置宽度并生成过渡。
-6. 底部切换 `2D Structure` / `3D Realistic`。
-7. 顶部保存或读取 `.bamboo.json`，并导出 PNG。
+- 任意数量、任意多边形区域，不再存在 `regionLeft / regionRight / divider` 固定模型
+- Rectangle、Polygon、Brush、Select、Direct Select、Eraser、Transition、Pan 工具
+- 滚轮缩放、Space 拖动画布、Fit/Reset、毫米标尺、网格与吸附
+- 区域移动、缩放、旋转、节点编辑、复制、删除、显示、锁定和图层排序
+- 28 个数据驱动的多方向参数化纹样及 Pattern Topology
+- 背景基础纹样与重叠区域优先级
+- 自动区域邻接图，不依赖区域数组位置
+- 可编辑 Transition Band：宽度、平滑度、复杂度和三个控制点
+- 密度、宽度与方向连续插值，以及显式 Merge / Split 节点
+- 多区域 2D SVG 与基础 3D 实体条带预览
+- 50 步 Undo/Redo、LocalStorage 自动保存、V2 JSON 读取/保存与 PNG 导出
 
-## 代码边界
+## 主要操作
 
-- `src/types`：统一项目、纹样、区域、条带与 Crossing 模型
-- `src/patterns`：数据驱动纹样目录
-- `src/engine`：独立的几何、纹样生成和过渡算法
-- `src/components`：编辑器与 2D/3D 渲染层
-- `src/store`：Zustand 项目状态、50 步 Undo/Redo
-- `src/utils`：文件读取与导出
+1. 选择左侧纹样。
+2. 使用 `R` 矩形、`P` 多边形或 `B` 画笔工具创建区域。
+3. 使用 `V` 选择并移动/缩放/旋转；使用 `A` 编辑区域节点。
+4. 在“图层”中调整区域顺序、显示、锁定、复制或删除。
+5. 创建相邻区域后，在画板空白处取消选择，点击右侧“生成全部结构过渡”；也可用 `L` 单独点击邻接边。
+6. 选择过渡区后调整宽度、平滑度和复杂度，并拖动画布上的三个控制点。
+7. 切换 `3D Realistic` 检查实体条带和过渡曲线。
+
+## 架构
+
+- `src/types`：V2 Document、Region、Pattern Instance、Adjacency、Transition、Merge/Split 模型
+- `src/patterns`：28 个纹样定义及拓扑特征
+- `src/engine`：几何、纹样生成、邻接图和结构过渡算法
+- `src/components`：工具栏、图层、SVG Canvas、属性面板和 Three.js Preview
+- `src/store`：Zustand 状态、历史与项目持久化
 
 ## 验证
 
@@ -37,3 +50,5 @@ pnpm test
 pnpm typecheck
 pnpm build
 ```
+
+当前图片识别/Manual Trace、复杂 Bridge Pattern 搜索、多区域 Junction 和 Web Worker 属于下一阶段 P1/P2，不在本次 P0 实现中。
