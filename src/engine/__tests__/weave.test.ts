@@ -5,13 +5,14 @@ import type { Point, WeaveRegion } from "../../types/weave";
 import { detectAdjacencies } from "../adjacency";
 import { generateDocumentWeave, generateRegionWeave, spacingForLayer } from "../patternGenerator";
 import { generateTransition, makeTransition, patternSimilarity } from "../transition";
+import { cutPath, splitPathAtLine } from "../stripEditing";
 
 function region(id: string, patternId: string, boundary: Point[], order: number): WeaveRegion {
   const definition = PATTERNS.find((item) => item.id === patternId) ?? PATTERNS[0];
-  return { id, name: id, boundary, order, locked: false, visible: true, color: order % 2 ? "#b88a52" : "#708f72", materialId: "natural-bamboo", boundaryMode: "trim", pattern: { patternId, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, density: order % 2 ? 100 : 60, stripWidth: order % 2 ? 5 : 3.5, directionLayers: structuredClone(definition.directionLayers), crossingRules: structuredClone(definition.crossingRules), crossingOverrides: {}, directionWidths: {}, directionColors: {}, localOverrides: {} } };
+  return { id, name: id, boundary, order, locked: false, visible: true, color: order % 2 ? "#b88a52" : "#708f72", materialId: "natural-bamboo", boundaryMode: "trim", pattern: { patternId, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, density: order % 2 ? 100 : 60, stripWidth: order % 2 ? 5 : 3.5, directionLayers: structuredClone(definition.directionLayers), crossingRules: structuredClone(definition.crossingRules), crossingOverrides: {}, directionWidths: {}, directionColors: {}, localOverrides: {}, manualStrips: [] } };
 }
 
-describe("V3 parametric weave engine", () => {
+describe("V4 parametric weave engine", () => {
   it("ships at least 20 vector topology patterns", () => {
     expect(PATTERNS.length).toBeGreaterThanOrEqual(20);
     expect(PATTERNS.every((pattern) => pattern.structure.directions.length >= 2 && pattern.topology.dominantDirections.length >= 2)).toBe(true);
@@ -64,5 +65,23 @@ describe("V3 parametric weave engine", () => {
     const spacing = makeTransition(adjacency, 0); const fan = { ...spacing, strategy: "fan-out" as const, fanStrength: 90 }; const skip = { ...spacing, strategy: "skip-weave" as const, complexity: 90 };
     const spacingResult = generateTransition(spacing, adjacency, a, b); const fanResult = generateTransition(fan, adjacency, a, b); const skipResult = generateTransition(skip, adjacency, a, b);
     expect(fanResult.strips[0].path[Math.floor(fanResult.strips[0].path.length / 2)]).not.toEqual(spacingResult.strips[0].path[Math.floor(spacingResult.strips[0].path.length / 2)]); expect(skipResult.strips.every((strip) => strip.sourceStripIds.length > 0 && strip.targetStripIds.length > 0)).toBe(true);
+  });
+  it("moves a complete direction layer without moving the other layer", () => {
+    const project = createInitialProject(); const item = region("move-layer", "plain", [{ x: 0, y: 0 }, { x: 140, y: 0 }, { x: 140, y: 100 }, { x: 0, y: 100 }], 1);
+    const before = generateRegionWeave(item, project.appearance); item.pattern.directionLayers[0].offsetX = 18; item.pattern.directionLayers[0].offsetY = -7; const after = generateRegionWeave(item, project.appearance);
+    expect(after.strips.find((strip) => strip.directionIndex === 0)!.path[0].x - before.strips.find((strip) => strip.directionIndex === 0)!.path[0].x).toBeCloseTo(18);
+    expect(after.strips.find((strip) => strip.directionIndex === 1)!.path).toEqual(before.strips.find((strip) => strip.directionIndex === 1)!.path);
+  });
+  it("performs a true geometric cut and can delete either side", () => {
+    const path = [{ x: 0, y: 50 }, { x: 100, y: 50 }]; const start = { x: 40, y: 0 }; const end = { x: 40, y: 100 };
+    expect(splitPathAtLine(path, start, end)).toEqual([[{ x: 0, y: 50 }, { x: 40, y: 50 }], [{ x: 40, y: 50 }, { x: 100, y: 50 }]]);
+    expect(cutPath(path, { start, end, scope: "all", mode: "keep-left" })).toHaveLength(1);
+    expect(cutPath(path, { start, end, scope: "all", mode: "keep-right" })).toHaveLength(1);
+  });
+  it("persists manual strips and stable generated strip identity", () => {
+    const project = createInitialProject(); const item = region("manual", "plain", [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 100 }, { x: 0, y: 100 }], 1);
+    item.pattern.manualStrips.push({ id: "manual-one", directionLayerId: item.pattern.directionLayers[0].id, path: [{ x: 10, y: 12 }, { x: 90, y: 78 }], width: 4, color: "#112233" });
+    const first = generateRegionWeave(item, project.appearance); const second = generateRegionWeave(item, project.appearance);
+    expect(first.strips.find((strip) => strip.id === "manual-one")?.sourceType).toBe("manual"); expect(first.strips.map((strip) => strip.baseStripId)).toEqual(second.strips.map((strip) => strip.baseStripId));
   });
 });

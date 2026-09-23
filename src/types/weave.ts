@@ -1,6 +1,8 @@
 export interface Point { x: number; y: number }
 
-export type CanvasTool = "select" | "direct" | "rectangle" | "polygon" | "brush" | "eraser" | "transition" | "gradient" | "crossing" | "pan";
+export type CanvasTool = "select" | "direct" | "rectangle" | "polygon" | "brush" | "eraser" | "transition" | "gradient" | "crossing" | "cut" | "add-strip" | "pan";
+export type CutScope = "all" | "region" | "layer" | "direction" | "selected";
+export type CutMode = "split" | "keep-left" | "keep-right" | "keep-both" | "delete-left" | "delete-right";
 export type PatternCategory = "basic" | "open" | "decorative" | "border";
 export type TransitionMode = "natural" | "structural" | "decorative" | "experimental";
 export type CrossingMode = "alternate" | "a-over" | "b-over" | "two-two" | "three-one" | "custom";
@@ -16,6 +18,44 @@ export interface DirectionLayer {
   enabled: boolean;
   color?: string;
   materialId?: string;
+  offsetX?: number;
+  offsetY?: number;
+  zOffset?: number;
+  rotationOffset?: number;
+  tiltX?: number;
+  tiltY?: number;
+  locked?: boolean;
+}
+
+export interface StripOverride {
+  color?: string;
+  width?: number;
+  offsetX?: number;
+  offsetY?: number;
+  zOffset?: number;
+  locked?: boolean;
+  manualPathOverride?: Point[];
+  cutSegments?: Point[][];
+}
+
+export interface ManualStripDefinition {
+  id: string;
+  directionLayerId: string;
+  path: Point[];
+  width: number;
+  color: string;
+  zOffset?: number;
+  locked?: boolean;
+}
+
+export interface CutLineState {
+  start: Point;
+  end: Point;
+  scope: CutScope;
+  mode: CutMode;
+  regionId?: string;
+  directionLayerId?: string;
+  directionAngle?: number;
 }
 
 export interface CrossingRule {
@@ -85,7 +125,8 @@ export interface PatternInstance {
   crossingOverrides: Record<string, string>;
   directionWidths: Record<string, number>;
   directionColors: Record<string, string>;
-  localOverrides: Record<string, { color?: string; width?: number }>;
+  localOverrides: Record<string, StripOverride>;
+  manualStrips: ManualStripDefinition[];
 }
 
 export interface WeaveRegion {
@@ -111,6 +152,10 @@ export interface StripGeometry {
   color: string;
   index: number;
   overUnderSequence: boolean[];
+  directionLayerId: string;
+  baseStripId: string;
+  sourceType: "generated" | "manual" | "transition";
+  zOffset: number;
 }
 
 export interface Crossing {
@@ -119,6 +164,7 @@ export interface Crossing {
   stripB: string;
   position: Point;
   overStripId: string;
+  regionId: string;
 }
 
 export interface StripMergeNode { id: string; incomingStripIds: string[]; outgoingStripId: string; position: Point }
@@ -183,7 +229,7 @@ export interface AppearanceSettings {
 }
 
 export interface WeaveDocument {
-  version: 3;
+  version: 4;
   name: string;
   canvas: CanvasConfig;
   regions: WeaveRegion[];

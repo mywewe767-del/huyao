@@ -46,9 +46,9 @@ export function loadJsonFile(file: File): Promise<WeaveDocument> {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const project = JSON.parse(String(reader.result)) as WeaveDocument;
-        if (project.version !== 3 || !Array.isArray(project.regions)) throw new Error("不支持的项目文件，请使用 V3 JSON");
-        resolve(project);
+        const raw = JSON.parse(String(reader.result)) as WeaveDocument | (Omit<WeaveDocument, "version"> & { version: 3 });
+        if (![3, 4].includes(raw.version) || !Array.isArray(raw.regions)) throw new Error("不支持的项目文件，请使用 V3 / V4 JSON");
+        resolve({ ...raw, version: 4, regions: raw.regions.map((region) => ({ ...region, pattern: { ...region.pattern, manualStrips: region.pattern.manualStrips ?? [] } })) });
       } catch (error) { reject(error); }
     };
     reader.onerror = () => reject(new Error("文件读取失败"));

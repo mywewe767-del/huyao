@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { detectAdjacencies } from "@/engine/adjacency";
-import { bounds, centroid, distance, simplifyPath, snapPoint } from "@/engine/geometry";
+import { bounds, centroid, distance, pointInPolygon, simplifyPath, snapPoint } from "@/engine/geometry";
 import { generateDocumentWeave } from "@/engine/patternGenerator";
 import { generateTransition } from "@/engine/transition";
+import { pathIntersectsCut, stripMatchesCutScope } from "@/engine/stripEditing";
 import { useStudioStore } from "@/store/useStudioStore";
 import type { Point, StripGeometry } from "@/types/weave";
 
@@ -23,15 +24,17 @@ function brushPolygon(path: Point[], size: number): Point[] {
   return [...upper, ...lower];
 }
 
-type DragMode = "move" | "resize" | "rotate" | "node" | "transition-node" | "pan" | null;
+type DragMode = "move" | "resize" | "rotate" | "node" | "transition-node" | "strip" | "strip-node" | "layer" | "cut" | "add-strip" | "pan" | null;
 
 export function WeaveCanvas() {
   const svgRef = useRef<SVGSVGElement>(null); const contentRef = useRef<SVGGElement>(null);
   const dragMode = useRef<DragMode>(null); const dragRegionId = useRef<string | null>(null); const nodeIndex = useRef(-1); const lastPoint = useRef<Point | null>(null);
   const dragTransitionId = useRef<string | null>(null);
+  const dragStrip = useRef<StripGeometry | null>(null);
+  const stripNodeIndex = useRef(-1);
   const [draft, setDraft] = useState<Point[]>([]); const [rectStart, setRectStart] = useState<Point | null>(null); const [cursor, setCursor] = useState<Point | null>(null); const [spaceDown, setSpaceDown] = useState(false);
   const state = useStudioStore();
-  const { project, activeTool, selectedRegionId, selectedStripId, selectedTransitionId, selectedPatternId, zoom, pan, brushSize } = state;
+  const { project, activeTool, selectedRegionId, selectedStripId, selectedStripIds, selectedCrossingId, selectedDirectionLayerId, selectedTransitionId, selectedPatternId, cutLine, zoom, pan, brushSize } = state;
   const weave = useMemo(() => generateDocumentWeave(project.regions, project.appearance, project.customPatterns), [project.regions, project.appearance, project.customPatterns]);
   const stripMap = useMemo(() => new Map(weave.strips.map((strip) => [strip.id, strip])), [weave.strips]);
   const adjacencies = useMemo(() => detectAdjacencies(project.regions), [project.regions]);
@@ -42,6 +45,7 @@ export function WeaveCanvas() {
     return adjacency && a && b && zone.enabled && zone.visible ? [{ zone, value: generateTransition(zone, adjacency, a, b, project.customPatterns) }] : [];
   }), [project.transitions, adjacencyMap, regionMap, project.customPatterns]);
   const selectedRegion = selectedRegionId ? regionMap.get(selectedRegionId) : undefined;
+  const affectedByCut = useMemo(() => new Set(cutLine ? weave.strips.filter((strip) => stripMatchesCutScope(strip, cutLine, selectedStripIds) && pathIntersectsCut(strip.path, cutLine)).map((strip) => strip.id) : []), [cutLine, weave.strips, selectedStripIds]);
 
   const toCanvasPoint = useCallback((clientX: number, clientY: number): Point => {
     const matrix = contentRef.current?.getScreenCTM(); if (!matrix) return { x: 0, y: 0 };
@@ -58,11 +62,11 @@ export function WeaveCanvas() {
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (event.code === "Space") { event.preventDefault(); setSpaceDown(true); }
-      const shortcuts: Record<string, typeof activeTool> = { v: "select", a: "direct", r: "rectangle", p: "polygon", b: "brush", e: "eraser", l: "transition", g: "gradient", c: "crossing", h: "pan" };
+      const shortcuts: Record<string, typeof activeTool> = { v: "select", a: "direct", r: "rectangle", p: "polygon", b: "brush", e: "eraser", l: "transition", g: "gradient", c: "crossing", x: "cut", s: "add-strip", h: "pan" };
       if (!event.ctrlKey && !event.metaKey && shortcuts[event.key.toLowerCase()]) state.setActiveTool(shortcuts[event.key.toLowerCase()]);
-      if (event.key === "Enter") finishPolygon();
+      if (event.key === "Enter") { if (activeTool === "polygon") finishPolygon(); else if (activeTool === "add-strip" && draft.length >= 2 && selectedRegionId) { state.addManualStrip(selectedRegionId, draft, selectedDirectionLayerId ?? undefined); setDraft([]); } }
       if (event.key === "Delete" || event.key === "Backspace") { if (selectedTransitionId) state.deleteTransition(selectedTransitionId); else if (selectedRegionId) state.deleteRegion(selectedRegionId); }
-      if (event.key === "Escape") { setDraft([]); setRectStart(null); }
+      if (event.key === "Escape") { setDraft([]); setRectStart(null); state.setCutLine(null); }
     };
     const up = (event: KeyboardEvent) => { if (event.code === "Space") setSpaceDown(false); };
     window.addEventListener("keydown", down); window.addEventListener("keyup", up); return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
@@ -79,7 +83,9 @@ export function WeaveCanvas() {
   const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     const point = toCanvasPoint(event.clientX, event.clientY); setCursor(point);
     if (activeTool === "pan" || spaceDown) { dragMode.current = "pan"; lastPoint.current = { x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); return; }
-    if (activeTool === "rectangle") { setRectStart(point); setDraft([point, point]); event.currentTarget.setPointerCapture(event.pointerId); }
+    if (activeTool === "cut") { state.setCutLine({ start: point, end: point, scope: selectedRegionId ? "region" : "all", mode: "split", regionId: selectedRegionId ?? undefined, directionLayerId: selectedDirectionLayerId ?? undefined }); dragMode.current = "cut"; event.currentTarget.setPointerCapture(event.pointerId); }
+    else if (activeTool === "add-strip") { setDraft([point]); dragMode.current = "add-strip"; event.currentTarget.setPointerCapture(event.pointerId); }
+    else if (activeTool === "rectangle") { setRectStart(point); setDraft([point, point]); event.currentTarget.setPointerCapture(event.pointerId); }
     else if (activeTool === "polygon") setDraft((current) => [...current, point]);
     else if (activeTool === "brush") { setDraft([point]); event.currentTarget.setPointerCapture(event.pointerId); }
     else if (activeTool === "select") state.selectRegion(null);
@@ -93,6 +99,11 @@ export function WeaveCanvas() {
     if (dragMode.current === "rotate" && dragRegionId.current && lastPoint.current) { const region = regionMap.get(dragRegionId.current); if (region) { const center = centroid(region.boundary); const before = Math.atan2(lastPoint.current.y - center.y, lastPoint.current.x - center.x); const after = Math.atan2(point.y - center.y, point.x - center.x); state.rotateRegion(region.id, (after - before) * 180 / Math.PI); } lastPoint.current = point; return; }
     if (dragMode.current === "node" && dragRegionId.current) { state.updateRegionPoint(dragRegionId.current, nodeIndex.current, point); return; }
     if (dragMode.current === "transition-node" && dragTransitionId.current) { const zone = project.transitions.find((item) => item.id === dragTransitionId.current); if (zone) state.updateTransition(zone.id, { controlPoints: zone.controlPoints.map((current, index) => index === nodeIndex.current ? point : current) }); return; }
+    if (dragMode.current === "cut" && cutLine) { state.updateCutLine({ end: point }); return; }
+    if (dragMode.current === "add-strip") { setDraft((current) => current.length && distance(current.at(-1)!, point) > 2 ? [...current, point] : current); return; }
+    if (dragMode.current === "strip" && dragStrip.current && lastPoint.current) { const region = regionMap.get(dragStrip.current.regionId); const override = region?.pattern.localOverrides[dragStrip.current.baseStripId]; state.updateStrip(dragStrip.current.regionId, dragStrip.current.baseStripId, { offsetX: (override?.offsetX ?? 0) + point.x - lastPoint.current.x, offsetY: (override?.offsetY ?? 0) + point.y - lastPoint.current.y }); lastPoint.current = point; return; }
+    if (dragMode.current === "strip-node" && dragStrip.current) { const nextPath = dragStrip.current.path.map((current, index) => index === stripNodeIndex.current ? point : current); state.updateStrip(dragStrip.current.regionId, dragStrip.current.baseStripId, { manualPathOverride: nextPath, offsetX: 0, offsetY: 0 }); dragStrip.current = { ...dragStrip.current, path: nextPath }; return; }
+    if (dragMode.current === "layer" && dragStrip.current && lastPoint.current) { const region = regionMap.get(dragStrip.current.regionId); const layer = region?.pattern.directionLayers.find((item) => item.id === dragStrip.current?.directionLayerId); if (layer && !layer.locked) state.updateDirectionLayer(region!.id, layer.id, { offsetX: (layer.offsetX ?? 0) + point.x - lastPoint.current.x, offsetY: (layer.offsetY ?? 0) + point.y - lastPoint.current.y }); lastPoint.current = point; return; }
     if (activeTool === "rectangle" && rectStart) setDraft([rectStart, point]);
     if (activeTool === "brush" && draft.length) setDraft((current) => [...current, point]);
   };
@@ -102,8 +113,9 @@ export function WeaveCanvas() {
       const end = draft[1]; state.addRegion([{ x: rectStart.x, y: rectStart.y }, { x: end.x, y: rectStart.y }, end, { x: rectStart.x, y: end.y }], selectedPatternId);
     }
     if (activeTool === "brush" && draft.length > 2) { const polygon = brushPolygon(draft, brushSize); if (polygon.length >= 3) state.addRegion(polygon, selectedPatternId); }
+    if (dragMode.current === "add-strip" && draft.length >= 2 && selectedRegionId) state.addManualStrip(selectedRegionId, draft, selectedDirectionLayerId ?? undefined);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setRectStart(null); if (activeTool !== "polygon") setDraft([]); dragMode.current = null; dragRegionId.current = null; dragTransitionId.current = null; lastPoint.current = null;
+    setRectStart(null); if (activeTool !== "polygon") setDraft([]); dragMode.current = null; dragRegionId.current = null; dragTransitionId.current = null; dragStrip.current = null; stripNodeIndex.current = -1; lastPoint.current = null;
   };
 
   const selectedBox = selectedRegion ? bounds(selectedRegion.boundary) : null;
@@ -117,12 +129,15 @@ export function WeaveCanvas() {
         {project.regions.toSorted((a, b) => a.order - b.order).map((region) => <g key={region.id} clipPath={`url(#clip-${region.id})`} opacity={region.visible ? 1 : 0}>
           {region.id !== "background" ? <polygon points={points(region.boundary)} fill={project.canvas.backgroundColor} /> : null}
           <polygon points={points(region.boundary)} fill={selectedRegionId === region.id ? region.color : "transparent"} opacity=".12" onPointerDown={(event) => startRegionDrag(event, region.id)} />
-          {weave.strips.filter((strip) => strip.regionId === region.id).map((strip) => <path key={strip.id} d={pathData(strip)} fill="none" stroke={strip.color} strokeWidth={strip.width} strokeLinecap="round" strokeLinejoin="round" opacity={selectedStripId && selectedStripId !== strip.id ? .68 : 1} className="woven-strip" onPointerDown={(event) => { event.stopPropagation(); state.selectRegion(region.id); state.selectStrip(strip.id); }} />)}
-          {(() => { const regionCrossings = weave.crossings.filter((crossing) => crossing.stripA.startsWith(`${region.id}-`)); const stride = Math.max(1, Math.ceil(regionCrossings.length / 900)); return regionCrossings.filter((_, index) => index % stride === 0).map((crossing) => { const over = stripMap.get(crossing.overStripId); if (!over) return null; const radians = over.directionAngle * Math.PI / 180; const length = Math.max(6, over.width * 1.9); const dx = Math.cos(radians) * length / 2; const dy = Math.sin(radians) * length / 2; return <g key={crossing.id} filter="url(#strip-shadow)" className={activeTool === "crossing" ? "editable-crossing" : ""} onPointerDown={activeTool === "crossing" ? (event) => { event.stopPropagation(); state.selectRegion(region.id); state.toggleCrossing(region.id, crossing.id, crossing.stripA, crossing.stripB, crossing.overStripId); } : undefined}><line pointerEvents="none" x1={crossing.position.x - dx} y1={crossing.position.y - dy} x2={crossing.position.x + dx} y2={crossing.position.y + dy} stroke={project.canvas.backgroundColor} strokeWidth={over.width + 1.5} strokeLinecap="round" /><line pointerEvents="none" x1={crossing.position.x - dx} y1={crossing.position.y - dy} x2={crossing.position.x + dx} y2={crossing.position.y + dy} stroke={over.color} strokeWidth={over.width} strokeLinecap="round" />{activeTool === "crossing" ? <circle cx={crossing.position.x} cy={crossing.position.y} r={Math.max(3.5, over.width)} fill="transparent" stroke="#fff" strokeOpacity=".65" strokeWidth=".7" /> : null}</g>; }); })()}
           <polygon points={points(region.boundary)} fill="transparent" className="region-hit" onPointerDown={(event) => startRegionDrag(event, region.id)} />
+          {weave.strips.filter((strip) => strip.regionId === region.id).map((strip) => <path key={strip.id} d={pathData(strip)} fill="none" stroke={affectedByCut.has(strip.id) ? "#e85938" : strip.color} strokeWidth={affectedByCut.has(strip.id) ? strip.width + 1.4 : strip.width} strokeLinecap="round" strokeLinejoin="round" opacity={selectedStripId && selectedStripId !== strip.id && selectedStripId !== strip.baseStripId ? .68 : 1} className={`woven-strip ${strip.sourceType}`} onPointerDown={(event) => { if (activeTool !== "select" && activeTool !== "direct") return; event.stopPropagation(); state.selectRegion(region.id); state.selectStrip(strip.baseStripId); if (activeTool === "direct") return; const override = region.pattern.localOverrides[strip.baseStripId]; if (override?.locked) return; dragStrip.current = strip; lastPoint.current = toCanvasPoint(event.clientX, event.clientY); dragMode.current = selectedDirectionLayerId === strip.directionLayerId ? "layer" : "strip"; event.currentTarget.setPointerCapture(event.pointerId); }} />)}
+          {(() => { const regionCrossings = weave.crossings.filter((crossing) => crossing.stripA.startsWith(`${region.id}-`)); const stride = Math.max(1, Math.ceil(regionCrossings.length / 900)); return regionCrossings.filter((_, index) => index % stride === 0).map((crossing) => { const over = stripMap.get(crossing.overStripId); if (!over) return null; const radians = over.directionAngle * Math.PI / 180; const length = Math.max(6, over.width * 1.9); const dx = Math.cos(radians) * length / 2; const dy = Math.sin(radians) * length / 2; return <g key={crossing.id} filter="url(#strip-shadow)" className={activeTool === "crossing" ? "editable-crossing" : ""} onPointerDown={activeTool === "crossing" ? (event) => { event.stopPropagation(); state.selectRegion(region.id); state.toggleCrossing(region.id, crossing.id, crossing.stripA, crossing.stripB, crossing.overStripId); } : undefined}><line pointerEvents="none" x1={crossing.position.x - dx} y1={crossing.position.y - dy} x2={crossing.position.x + dx} y2={crossing.position.y + dy} stroke={project.canvas.backgroundColor} strokeWidth={over.width + 1.5} strokeLinecap="round" /><line pointerEvents="none" x1={crossing.position.x - dx} y1={crossing.position.y - dy} x2={crossing.position.x + dx} y2={crossing.position.y + dy} stroke={over.color} strokeWidth={over.width} strokeLinecap="round" />{activeTool === "crossing" ? <circle cx={crossing.position.x} cy={crossing.position.y} r={Math.max(3.5, over.width)} fill="transparent" stroke="#fff" strokeOpacity=".65" strokeWidth=".7" /> : null}</g>; }); })()}
         </g>)}
         {transitionResults.map(({ zone, value }) => <g key={zone.id} className={`transition-zone ${selectedTransitionId === zone.id ? "selected" : ""}`} onPointerDown={(event) => { event.stopPropagation(); state.selectTransition(zone.id); }}><polygon points={points(value.band)} fill={project.canvas.backgroundColor} opacity=".94" stroke="#b7791f" strokeWidth={selectedTransitionId === zone.id ? 1.8 : .7} strokeDasharray="4 3" />{value.strips.map((strip) => <path key={strip.id} d={pathData(strip)} fill="none" stroke={strip.color} strokeWidth={strip.width} strokeLinecap="round" strokeLinejoin="round" />)}{value.mergeNodes.map((node) => <circle key={node.id} cx={node.position.x} cy={node.position.y} r="2.2" fill="#d17b3f" />)}{value.splitNodes.map((node) => <rect key={node.id} x={node.position.x - 1.8} y={node.position.y - 1.8} width="3.6" height="3.6" transform={`rotate(45 ${node.position.x} ${node.position.y})`} fill="#547c78" />)}{zone.controlPoints.map((point, index) => selectedTransitionId === zone.id ? <circle className="transition-control" key={index} cx={point.x} cy={point.y} r="3.2" fill="white" stroke="#b7791f" strokeWidth="1" onPointerDown={(event) => { event.stopPropagation(); dragMode.current = "transition-node"; dragTransitionId.current = zone.id; nodeIndex.current = index; }} /> : null)}</g>)}
         {activeTool === "transition" ? adjacencies.map((adjacency) => <g key={adjacency.id} className="adjacency-preview" onPointerDown={(event) => { event.stopPropagation(); state.addTransition(adjacency); }}><line x1={adjacency.sharedBoundary[0].x} y1={adjacency.sharedBoundary[0].y} x2={adjacency.sharedBoundary[1].x} y2={adjacency.sharedBoundary[1].y} /><circle cx={adjacency.center.x} cy={adjacency.center.y} r="5" /><text x={adjacency.center.x} y={adjacency.center.y + 1}>+</text></g>) : null}
+        {activeTool === "crossing" ? <g className="crossing-hit-layer">{weave.crossings.filter((crossing) => { const region = regionMap.get(crossing.regionId); return region ? pointInPolygon(crossing.position, region.boundary) : false; }).map((crossing) => <circle key={`hit-${crossing.id}`} cx={crossing.position.x} cy={crossing.position.y} r="7" className={selectedCrossingId === crossing.id ? "selected" : ""} onPointerDown={(event) => { event.stopPropagation(); state.selectCrossing(crossing.regionId, crossing.id); state.toggleCrossing(crossing.regionId, crossing.id, crossing.stripA, crossing.stripB, crossing.overStripId); }} />)}</g> : null}
+        {activeTool === "direct" && selectedStripId ? weave.strips.filter((strip) => strip.baseStripId === selectedStripId).map((strip) => <g key={`edit-${strip.id}`} className="strip-path-editor"><path d={pathData(strip)} />{strip.path.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="3.2" onPointerDown={(event) => { event.stopPropagation(); dragStrip.current = strip; stripNodeIndex.current = index; dragMode.current = "strip-node"; event.currentTarget.setPointerCapture(event.pointerId); }} />)}</g>) : null}
+        {cutLine ? <g className="cut-line-preview"><line x1={cutLine.start.x} y1={cutLine.start.y} x2={cutLine.end.x} y2={cutLine.end.y} /><circle cx={cutLine.start.x} cy={cutLine.start.y} r="3" /><circle cx={cutLine.end.x} cy={cutLine.end.y} r="3" /><text x={(cutLine.start.x + cutLine.end.x) / 2 + 4} y={(cutLine.start.y + cutLine.end.y) / 2 - 4}>{affectedByCut.size} 根</text></g> : null}
         {draft.length ? activeTool === "rectangle" && draft[1] ? <rect x={Math.min(draft[0].x, draft[1].x)} y={Math.min(draft[0].y, draft[1].y)} width={Math.abs(draft[1].x - draft[0].x)} height={Math.abs(draft[1].y - draft[0].y)} className="region-draft" /> : <><polyline points={points(draft)} className="region-draft-line" />{activeTool === "polygon" && cursor ? <line x1={draft.at(-1)!.x} y1={draft.at(-1)!.y} x2={cursor.x} y2={cursor.y} className="region-draft-line" /> : null}</> : null}
         {selectedRegion && selectedBox && activeTool !== "pan" ? <g className="selection-box"><rect x={selectedBox.x} y={selectedBox.y} width={selectedBox.width} height={selectedBox.height} /><line x1={selectedBox.x + selectedBox.width / 2} y1={selectedBox.y} x2={selectedBox.x + selectedBox.width / 2} y2={selectedBox.y - 13} /><circle cx={selectedBox.x + selectedBox.width / 2} cy={selectedBox.y - 16} r="3.3" onPointerDown={(event) => { event.stopPropagation(); dragMode.current = "rotate"; dragRegionId.current = selectedRegion.id; lastPoint.current = toCanvasPoint(event.clientX, event.clientY); }} /><rect className="resize-handle" x={selectedBox.x + selectedBox.width - 3} y={selectedBox.y + selectedBox.height - 3} width="6" height="6" onPointerDown={(event) => { event.stopPropagation(); dragMode.current = "resize"; dragRegionId.current = selectedRegion.id; lastPoint.current = toCanvasPoint(event.clientX, event.clientY); }} />{activeTool === "direct" ? selectedRegion.boundary.map((point, index) => <rect key={index} className="node-handle" x={point.x - 2.7} y={point.y - 2.7} width="5.4" height="5.4" onPointerDown={(event) => { event.stopPropagation(); dragMode.current = "node"; dragRegionId.current = selectedRegion.id; nodeIndex.current = index; }} />) : null}</g> : null}
         <rect width={project.canvas.width} height={project.canvas.height} fill="none" stroke="#4d514b" strokeWidth="1.1" />

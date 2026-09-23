@@ -1,6 +1,6 @@
 "use client";
 
-import { Brush, CircleDot, Eraser, Hand, MousePointer2, PenTool, RectangleHorizontal, Route, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Brush, CircleDot, Eraser, Hand, MousePointer2, PenLine, PenTool, RectangleHorizontal, Route, Scissors, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
 import type { CanvasTool } from "@/types/weave";
 
@@ -14,6 +14,8 @@ const tools: { id: CanvasTool; label: string; shortcut: string; icon: typeof Mou
   { id: "transition", label: "过渡工具", shortcut: "L", icon: Route },
   { id: "gradient", label: "密度渐变", shortcut: "G", icon: SlidersHorizontal },
   { id: "crossing", label: "交点 Over / Under", shortcut: "C", icon: CircleDot },
+  { id: "cut", label: "切割竹条", shortcut: "X", icon: Scissors },
+  { id: "add-strip", label: "新增竹条", shortcut: "S", icon: PenLine },
   { id: "pan", label: "平移画布", shortcut: "H", icon: Hand },
 ];
 

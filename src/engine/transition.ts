@@ -131,7 +131,7 @@ function transitionBend(zone: TransitionZone, index: number, count: number): num
 }
 
 function makeStrip(id: string, type: TransitionConnectionType, sources: BoundaryStripEndpoint[], targets: BoundaryStripEndpoint[], path: Point[], width: number, color: string, directionAngle: number, index: number): TransitionStrip {
-  return { id, regionId: id.split("-segment-")[0], directionAngle, directionIndex: index, index, path, width, color, overUnderSequence: Array.from({ length: path.length }, (_, crossing) => crossing % 2 === 0), sourceStripIds: sources.map((item) => item.stripId), targetStripIds: targets.map((item) => item.stripId), type, inheritedWidth: width, inheritedMaterial: sources[0]?.materialId ?? targets[0]?.materialId };
+  return { id, baseStripId: id, regionId: id.split("-segment-")[0], directionLayerId: "transition", directionAngle, directionIndex: index, index, path, width, color, zOffset: 0, sourceType: "transition", overUnderSequence: Array.from({ length: path.length }, (_, crossing) => crossing % 2 === 0), sourceStripIds: sources.map((item) => item.stripId), targetStripIds: targets.map((item) => item.stripId), type, inheritedWidth: width, inheritedMaterial: sources[0]?.materialId ?? targets[0]?.materialId };
 }
 
 function validateConnectivity(strips: TransitionStrip[], source: BoundaryStripEndpoint[], target: BoundaryStripEndpoint[]): string[] {
