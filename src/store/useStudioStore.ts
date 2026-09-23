@@ -112,7 +112,7 @@ export const useStudioStore = create<StudioState>((set) => ({
   selectRegion: (selectedRegionId) => set({ selectedRegionId, selectedStripId: null, selectedStripIds: [], selectedCrossingId: null, selectedDirectionLayerId: null, selectedTransitionId: null }),
   selectStrip: (selectedStripId) => set({ selectedStripId, selectedStripIds: selectedStripId ? [selectedStripId] : [], selectedCrossingId: null }),
   selectCrossing: (selectedRegionId, selectedCrossingId) => set({ selectedRegionId, selectedCrossingId, selectedStripId: null, selectedStripIds: [], selectedTransitionId: null }),
-  selectDirectionLayer: (selectedRegionId, selectedDirectionLayerId) => set({ selectedRegionId, selectedDirectionLayerId, selectedStripId: null, selectedStripIds: [], selectedCrossingId: null, selectedTransitionId: null }),
+  selectDirectionLayer: (selectedRegionId, selectedDirectionLayerId) => set((state) => ({ selectedRegionId, selectedDirectionLayerId: state.selectedDirectionLayerId === selectedDirectionLayerId ? null : selectedDirectionLayerId, selectedStripId: null, selectedStripIds: [], selectedCrossingId: null, selectedTransitionId: null })),
   selectTransition: (selectedTransitionId) => set({ selectedTransitionId, selectedRegionId: null, selectedStripId: null, selectedStripIds: [], selectedCrossingId: null, selectedDirectionLayerId: null }),
   setViewMode: (viewMode) => set({ viewMode }), setZoom: (zoom) => set({ zoom: Math.max(.35, Math.min(3.5, zoom)) }), setPan: (pan) => set({ pan }),
   fitView: () => set({ zoom: 1, pan: { x: 0, y: 0 } }), setBrushSize: (brushSize) => set({ brushSize }), setToast: (toast) => set({ toast }),
